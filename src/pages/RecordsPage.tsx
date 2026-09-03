@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Trash2, Mic, Keyboard, Bot } from 'lucide-react'
 import { useLang } from '../lib/lang'
 import { useRecords } from '../hooks/useRecords'
@@ -68,17 +69,17 @@ export function RecordsPage() {
                 <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 mt-0.5">
                   <SourceIcon className="w-4 h-4 text-white/50" />
                 </div>
-                <div className="flex-1 min-w-0">
+                <Link to={`/records/${r.id}`} className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <Badge className={typeBadgeClass(r.type)}>{r.type}</Badge>
                     {r.person && <span className="text-sm text-white/70">{r.person}</span>}
                     {r.amount !== undefined && <span className="text-sm font-medium text-white">{formatTSh(r.amount)}</span>}
                   </div>
-                  <p className="text-sm text-white/80 truncate">{r.item || r.note || r.originalText}</p>
+                  <p className="text-sm text-white/90 font-medium truncate">{r.title}</p>
                   <p className="text-xs text-white/30 mt-1">
                     {formatDate(r.createdAt)} · {formatTime(r.createdAt)} · {timeAgo(r.createdAt)}
                   </p>
-                </div>
+                </Link>
                 <button onClick={() => remove(r.id)} className="text-white/20 hover:text-red-400 transition-colors shrink-0">
                   <Trash2 className="w-4 h-4" />
                 </button>

@@ -59,6 +59,10 @@ export const STR: Record<string, Record<Lang, string>> = {
   recordsInPeriod:{ en: 'records in this period',     sw: 'kumbukumbu katika kipindi hiki' },
   summary:        { en: 'Summary',                    sw: 'Muhtasari' },
   overall:        { en: 'Overview',                   sw: 'Muhtasari Mkuu' },
+  jumpTo:         { en: 'Jump to',                    sw: 'Nenda kwa' },
+  dailyBreakdown: { en: 'Daily breakdown',             sw: 'Mchanganuo wa kila siku' },
+  noRecordsForDay:{ en: 'No records this day',        sw: 'Hakuna kumbukumbu siku hii' },
+  today:          { en: 'Today',                      sw: 'Leo' },
 
   askPlaceholder: { en: 'Ask about your records...',  sw: 'Uliza kuhusu kumbukumbu zako...' },
   askHint:        { en: 'Ask a question about your records', sw: 'Uliza swali kuhusu kumbukumbu zako' },

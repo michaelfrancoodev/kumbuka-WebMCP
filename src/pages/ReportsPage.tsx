@@ -1,10 +1,18 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, ChevronDown, TrendingDown, TrendingUp, Wallet, ArrowUpRight, CalendarDays } from 'lucide-react'
+import { clsx } from 'clsx'
 import { useLang } from '../lib/lang'
 import { useRecords } from '../hooks/useRecords'
 import { formatTSh } from '../lib/money'
-import { getCurrentRange, shiftRange, type RangeType } from '../lib/dates'
+import {
+  getCurrentRange, shiftRange, eachDayInRange, startOfDay, endOfDay, formatTime,
+  toIsoDateInput, fromIsoDateInput, toIsoWeekInput, fromIsoWeekInput, toIsoMonthInput, fromIsoMonthInput,
+  type RangeType,
+} from '../lib/dates'
 import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Sheet'
+import type { ActivityRecord } from '../lib/types'
 
 const RANGE_OPTIONS: RangeType[] = ['day', 'week', 'month']
 
@@ -16,15 +24,38 @@ export function ReportsPage() {
 
   function changeRangeType(rt: RangeType) {
     setRangeType(rt)
-    setRange(getCurrentRange(rt))
+    setRange(getCurrentRange(rt, range.start))
   }
 
   function shift(dir: -1 | 1) {
     setRange(prev => shiftRange(prev, rangeType, dir))
   }
 
+  function jumpToToday() {
+    setRange(getCurrentRange(rangeType))
+  }
+
+  function handlePickerChange(value: string) {
+    let picked: Date | undefined
+    if (rangeType === 'day') picked = fromIsoDateInput(value)
+    else if (rangeType === 'week') picked = fromIsoWeekInput(value)
+    else picked = fromIsoMonthInput(value)
+    if (picked) setRange(getCurrentRange(rangeType, picked))
+  }
+
+  const pickerValue =
+    rangeType === 'day' ? toIsoDateInput(range.start)
+    : rangeType === 'week' ? toIsoWeekInput(range.start)
+    : toIsoMonthInput(range.start)
+  const pickerType = rangeType === 'day' ? 'date' : rangeType === 'week' ? 'week' : 'month'
+
+  // Every record whose createdAt falls inside the selected range, oldest first —
+  // one consistent chronological order used throughout day/week/month views.
   const inRange = useMemo(
-    () => records.filter(r => r.createdAt >= range.start.getTime() && r.createdAt <= range.end.getTime()),
+    () =>
+      records
+        .filter(r => r.createdAt >= range.start.getTime() && r.createdAt <= range.end.getTime())
+        .sort((a, b) => a.createdAt - b.createdAt),
     [records, range],
   )
 
@@ -44,11 +75,15 @@ export function ReportsPage() {
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8)
   }, [inRange])
 
+  // Every calendar day in the range, even ones with zero records — this is
+  // what guarantees week/month rollups never silently skip a day.
+  const days = useMemo(() => eachDayInRange(range.start, range.end), [range])
+
   return (
     <div className="px-4 md:px-8 py-8 max-w-3xl mx-auto">
       <h1 className="font-display text-xl font-semibold text-white mb-6">{t('reports')}</h1>
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex gap-1.5">
           {RANGE_OPTIONS.map(rt => (
             <button
@@ -62,13 +97,27 @@ export function ReportsPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => shift(-1)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/50">
+
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => shift(-1)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/50" aria-label="previous">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button onClick={() => shift(1)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/50">
+          <button onClick={jumpToToday} className="px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-white/50 text-xs font-medium">
+            {t('today')}
+          </button>
+          <button onClick={() => shift(1)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/50" aria-label="next">
             <ChevronRight className="w-4 h-4" />
           </button>
+          <label className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs cursor-pointer hover:bg-white/10 transition-colors">
+            <CalendarDays className="w-3.5 h-3.5" />
+            {t('jumpTo')}
+            <input
+              type={pickerType}
+              value={pickerValue}
+              onChange={e => handlePickerChange(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </label>
         </div>
       </div>
 
@@ -86,7 +135,7 @@ export function ReportsPage() {
 
           <p className="text-xs text-white/30 mb-6">{inRange.length} {t('recordsInPeriod')}</p>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-4 mb-8">
             <Card className="p-5">
               <h3 className="text-sm font-medium text-white/70 mb-3">{t('byType')}</h3>
               <div className="flex flex-col gap-2">
@@ -117,6 +166,23 @@ export function ReportsPage() {
           </div>
         </>
       )}
+
+      {rangeType === 'day' ? (
+        <DayRecordList records={inRange} />
+      ) : (
+        <>
+          <h2 className="text-sm font-medium text-white/70 mb-3">{t('dailyBreakdown')}</h2>
+          <div className="flex flex-col gap-2">
+            {days.map(day => (
+              <DayAccordion
+                key={day.getTime()}
+                day={day}
+                records={inRange.filter(r => r.createdAt >= startOfDay(day).getTime() && r.createdAt <= endOfDay(day).getTime())}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -128,5 +194,96 @@ function StatCard({ icon: Icon, label, value, tone }: { icon: any; label: string
       <p className="text-xs text-white/40 mb-1">{label}</p>
       <p className="text-sm font-semibold text-white truncate">{value}</p>
     </Card>
+  )
+}
+
+// A single day's row within a week/month rollup. Always rendered — even at
+// zero records — and expands to show every record for that day in order,
+// each linking back to its own permanent record page.
+function DayAccordion({ day, records }: { day: Date; records: ActivityRecord[] }) {
+  const { t } = useLang()
+  const [open, setOpen] = useState(false)
+  const hasRecords = records.length > 0
+  const dayOut = records.filter(r => r.type === 'expense').reduce((s, r) => s + (r.amount || 0), 0)
+  const dayIn = records.filter(r => r.type === 'income').reduce((s, r) => s + (r.amount || 0), 0)
+
+  return (
+    <Card className={clsx('overflow-hidden', !hasRecords && 'opacity-50')}>
+      <button
+        onClick={() => hasRecords && setOpen(o => !o)}
+        disabled={!hasRecords}
+        className="w-full flex items-center justify-between gap-3 p-4 text-left disabled:cursor-default"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <ChevronDown className={clsx('w-4 h-4 text-white/30 shrink-0 transition-transform', open && 'rotate-180', !hasRecords && 'opacity-0')} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white">
+              {day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </p>
+            <p className="text-xs text-white/40">
+              {hasRecords ? `${records.length} ${t('recordsInPeriod')}` : t('noRecordsForDay')}
+            </p>
+          </div>
+        </div>
+        {hasRecords && (
+          <div className="text-right shrink-0 text-xs">
+            {dayIn > 0 && <p className="text-emerald-400 font-medium">+{formatTSh(dayIn)}</p>}
+            {dayOut > 0 && <p className="text-red-400 font-medium">-{formatTSh(dayOut)}</p>}
+          </div>
+        )}
+      </button>
+      {open && hasRecords && (
+        <div className="border-t border-white/[0.06] px-4 pb-3 pt-1 flex flex-col gap-2">
+          {records.map(r => (
+            <Link
+              key={r.id}
+              to={`/records/${r.id}`}
+              className="flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-white/5 transition-colors group"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className="bg-white/5 text-white/40 border-white/10 capitalize">{r.type}</Badge>
+                  <span className="text-xs text-white/30">{formatTime(r.createdAt)}</span>
+                </div>
+                <p className="text-sm text-white/85 truncate mt-0.5">{r.title}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {r.amount !== undefined && <span className="text-sm font-medium text-white">{formatTSh(r.amount)}</span>}
+                <ArrowUpRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/60 transition-colors" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// Flat chronological list used for the single-day view (no accordion needed —
+// there's only one day, so just show everything for it directly).
+function DayRecordList({ records }: { records: ActivityRecord[] }) {
+  const { t } = useLang()
+  if (records.length === 0) return null
+  return (
+    <div className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium text-white/70 mb-1">{t('recordsInPeriod')}</h2>
+      {records.map(r => (
+        <Link key={r.id} to={`/records/${r.id}`}>
+          <Card className="p-4 flex items-center justify-between gap-3" hover>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <Badge className="bg-white/5 text-white/40 border-white/10 capitalize">{r.type}</Badge>
+                <span className="text-xs text-white/30">{formatTime(r.createdAt)}</span>
+              </div>
+              <p className="text-sm text-white/85 truncate">{r.title}</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {r.amount !== undefined && <span className="text-sm font-medium text-white">{formatTSh(r.amount)}</span>}
+              <ArrowUpRight className="w-3.5 h-3.5 text-white/20" />
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </div>
   )
 }

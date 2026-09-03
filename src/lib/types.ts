@@ -4,6 +4,7 @@ export type Lang = 'en' | 'sw'
 
 export interface ActivityRecord {
   id: string
+  title: string
   type: RecordType
   person?: string
   amount?: number
@@ -26,4 +27,5 @@ export interface ParsedDraft {
   note?: string
   originalText: string
   missing: Array<'amount' | 'person' | 'item'>
+  title: string
 }

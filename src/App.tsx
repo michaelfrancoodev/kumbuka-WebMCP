@@ -4,6 +4,7 @@ import { LangProvider, useLang } from './lib/lang'
 import { Sidebar, BottomNav } from './components/shell/Nav'
 import { RecordPage } from './pages/RecordPage'
 import { RecordsPage } from './pages/RecordsPage'
+import { RecordDetailPage } from './pages/RecordDetailPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { AskPage } from './pages/AskPage'
 import { registerWebMCPTools } from './lib/webmcp-register'
@@ -30,8 +31,8 @@ function Shell() {
         <header className="sticky top-0 z-30 bg-[#0c0c0d]/80 backdrop-blur-xl border-b border-white/[0.04] safe-top">
           <div className="px-4 md:px-8 h-14 flex items-center justify-between max-w-5xl">
             <div className="md:hidden flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-white/5 border border-white/10 flex items-center justify-center">
-                <span className="text-xs font-bold text-white">K</span>
+              <div className="w-6 h-6 rounded bg-accent/10 border border-accent/25 flex items-center justify-center">
+                <span className="text-xs font-bold text-accent-light">K</span>
               </div>
               <span className="font-display font-semibold text-white text-sm">Kumbuka</span>
             </div>
@@ -42,6 +43,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<RecordPage />} />
           <Route path="/records" element={<RecordsPage />} />
+          <Route path="/records/:id" element={<RecordDetailPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/ask" element={<AskPage />} />
         </Routes>

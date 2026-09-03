@@ -58,6 +58,7 @@ describe('Kumbuka app', () => {
   it('shows saved records on the records page', async () => {
     await db.records.put({
       id: 'test-1',
+      title: 'Diesel paid to John — TSh 5,000',
       type: 'expense',
       person: 'John',
       amount: 5000,

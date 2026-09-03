@@ -36,4 +36,45 @@ describe('parseSentence', () => {
     const d = parseSentence('nimelipa')
     expect(d.missing).toContain('amount')
   })
+
+  it('parses "laki tatu" as 300,000', () => {
+    const d = parseSentence('Nimeuza dhahabu kwa shilingi laki tatu')
+    expect(d.amount).toBe(300_000)
+  })
+
+  it('parses digit-string amounts after laki ("laki mbili nane" -> 280,000)', () => {
+    const d = parseSentence('Nimeuza dhahabu kwa shilingi laki mbili nane')
+    expect(d.amount).toBe(280_000)
+  })
+
+  it('recovers from the ASR mishearing "laki" as "lucky"', () => {
+    // Real reported bug: speech recognition transcribed "laki" as "lucky",
+    // which previously caused the amount to be parsed as 10 instead of 280,000.
+    const d = parseSentence('leo nimeuza dhahabu kwa tanzania shilling lucky mbili nane')
+    expect(d.amount).toBe(280_000)
+    expect(d.type).toBe('income')
+  })
+
+  it('parses compound numerals with tens after a scale word ("elfu kumi na tano" -> 15,000)', () => {
+    const d = parseSentence('nimelipa elfu kumi na tano kwa mafuta')
+    expect(d.amount).toBe(15_000)
+  })
+
+  it('keeps a lone spoken digit as a small number, not a scaled amount', () => {
+    const d = parseSentence('nimebeba magunia tatu ya saruji')
+    expect(d.amount).toBe(3)
+  })
+
+  it('never alters the original raw narration, even when amount parsing normalizes it internally', () => {
+    const raw = 'leo nimeuza dhahabu kwa tanzania shilling lucky mbili nane'
+    const d = parseSentence(raw)
+    expect(d.originalText).toBe(raw)
+  })
+
+  it('generates a short structured title instead of reusing the raw text', () => {
+    const d = parseSentence('Nimempa John 5000 kwa diesel')
+    expect(d.title).not.toBe(d.originalText)
+    expect(d.title.toLowerCase()).toContain('john')
+    expect(d.title).toContain('5,000')
+  })
 })

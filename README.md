@@ -25,9 +25,9 @@ These tools read and write the same [Dexie](https://dexie.org/) (IndexedDB) stor
 ## How it works
 
 1. **Record** — tap the mic (or type) and say one sentence in any language: *"Nimempa John 5000 kwa diesel"*.
-2. Kumbuka's lightweight bilingual parser (`src/lib/parse.ts`) extracts type (expense/income/activity), person, amount, item, and unit — with word-number support for Swahili (`elfu`, `laki`, `milioni`) and shorthand like `5k`.
-3. **Review before saving** — a confirm sheet shows exactly what was understood, editable, before anything is written.
-4. **Records / Reports / Ask** — browse, filter, see day/week/month summaries, or search past entries in plain language.
+2. Kumbuka's lightweight bilingual parser (`src/lib/parse.ts`) extracts type (expense/income/activity), person, amount, item, and unit — with word-number support for Swahili (`elfu`, `laki`, `milioni`), digit-string amounts as spoken in the field (`laki mbili nane` → 280,000), common speech-recognition mishearings (`lucky` → `laki`), and shorthand like `5k`. It also generates a short title from the structured fields — never the raw sentence.
+3. **Review before saving** — a confirm sheet shows the generated title, the original narration verbatim, and every extracted field, editable, before anything is written. The raw narration is never altered and is always stored alongside the structured record.
+4. **Records / Reports / Ask** — browse, filter, or search past entries in plain language. Reports has a real day/week/month calendar picker; week and month views show every calendar day (even empty ones) with a per-day breakdown, and every record anywhere in the app links to its own permanent `/records/:id` page showing the original entry.
 5. Everything also happens automatically for an agent through the WebMCP tools above.
 
 ## Tech stack
@@ -49,7 +49,8 @@ WebMCP itself is an experimental, origin-trial browser API (Chrome). If `navigat
 
 The test suite (`src/test/`) covers three layers:
 
-- **`parse.test.ts`** — unit tests for the sentence parser (amounts, currency shorthand, Swahili number words, keyword-based type detection).
+- **`parse.test.ts`** — unit tests for the sentence parser (amounts, currency shorthand, Swahili number words, digit-string amounts, ASR-mishearing recovery, and keyword-based type detection).
+- **`dates.test.ts`** — locks in the calendar-rollup guarantee that no day is ever skipped across day/week/month ranges, plus round-trips for the date/week/month picker inputs.
 - **`webmcp-register.test.ts`** — registers the real tools against a mocked `navigator.modelContext` and exercises every tool's `execute()` against a fake IndexedDB, verifying an agent can add, list, search, summarize, and delete records correctly.
 - **`app.test.tsx`** — renders the full app and drives an actual user flow: type an entry → review parsed fields → confirm → verify it's saved and shown on the Records page.
 
@@ -73,8 +74,9 @@ src/
   pages/
     RecordPage.tsx          # Voice/text capture + confirm sheet
     RecordsPage.tsx          # Filterable record list
-    ReportsPage.tsx          # Day/week/month summaries
-    AskPage.tsx               # Keyword search over records
+    RecordDetailPage.tsx      # Permanent per-record page ("view original record")
+    ReportsPage.tsx            # Day/week/month calendar picker + daily breakdown
+    AskPage.tsx                 # Keyword search over records, links back to originals
   components/
     ui/                        # Button, Card, Sheet, Badge
     shell/Nav.tsx               # Sidebar + bottom nav

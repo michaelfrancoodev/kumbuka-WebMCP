@@ -63,6 +63,62 @@ export function shiftRange(r: DateRange, type: RangeType, dir: -1 | 1): DateRang
   }
 }
 
+// Every calendar day between start and end, inclusive — used so week/month
+// rollups never silently skip a day, even ones with zero records.
+export function eachDayInRange(start: Date, end: Date): Date[] {
+  const days: Date[] = []
+  let cur = startOfDay(start)
+  const last = startOfDay(end)
+  while (cur.getTime() <= last.getTime()) {
+    days.push(new Date(cur))
+    cur = addDays(cur, 1)
+  }
+  return days
+}
+
+// --- <input type="date|week|month"> <-> Date conversions -----------------
+
+function pad(n: number): string { return n.toString().padStart(2, '0') }
+
+export function toIsoDateInput(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+export function fromIsoDateInput(value: string): Date | undefined {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return undefined
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+export function toIsoMonthInput(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}
+export function fromIsoMonthInput(value: string): Date | undefined {
+  const m = value.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return undefined
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1)
+}
+
+// ISO-8601 week numbering (weeks start Monday, week 1 contains the year's first Thursday).
+export function toIsoWeekInput(d: Date): string {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const day = (t.getDay() + 6) % 7 // Mon=0..Sun=6
+  t.setDate(t.getDate() - day + 3) // nearest Thursday
+  const firstThursday = new Date(t.getFullYear(), 0, 4)
+  const firstThursdayDay = (firstThursday.getDay() + 6) % 7
+  firstThursday.setDate(firstThursday.getDate() - firstThursdayDay + 3)
+  const week = 1 + Math.round((t.getTime() - firstThursday.getTime()) / (7 * 86400000))
+  return `${t.getFullYear()}-W${pad(week)}`
+}
+export function fromIsoWeekInput(value: string): Date | undefined {
+  const m = value.match(/^(\d{4})-W(\d{2})$/)
+  if (!m) return undefined
+  const year = Number(m[1]), week = Number(m[2])
+  const jan4 = new Date(year, 0, 4)
+  const jan4Day = (jan4.getDay() + 6) % 7
+  const week1Monday = addDays(jan4, -jan4Day)
+  return addDays(week1Monday, (week - 1) * 7)
+}
+
 export function timeAgo(ts: number): string {
   const diff = Date.now() - ts
   const mins = Math.floor(diff / 60000)

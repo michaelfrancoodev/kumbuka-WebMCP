@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Search, ArrowUpRight } from 'lucide-react'
 import { useLang } from '../lib/lang'
 import { useRecords } from '../hooks/useRecords'
 import { formatTSh } from '../lib/money'
@@ -78,8 +79,14 @@ export function AskPage() {
                       {r.person && <span className="text-sm text-white/70">{r.person}</span>}
                       {r.amount !== undefined && <span className="text-sm font-medium text-white">{formatTSh(r.amount)}</span>}
                     </div>
-                    <p className="text-sm text-white/80">{r.originalText}</p>
-                    <p className="text-xs text-white/30 mt-1">{formatDate(r.createdAt)} · {formatTime(r.createdAt)}</p>
+                    <p className="text-sm font-medium text-white/90 mb-0.5">{r.title}</p>
+                    <p className="text-sm text-white/60">"{r.originalText}"</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-xs text-white/30">{formatDate(r.createdAt)} · {formatTime(r.createdAt)}</p>
+                      <Link to={`/records/${r.id}`} className="text-xs text-white/40 hover:text-white inline-flex items-center gap-1">
+                        {t('viewOriginal')} <ArrowUpRight className="w-3 h-3" />
+                      </Link>
+                    </div>
                   </Card>
                 ))}
               </div>

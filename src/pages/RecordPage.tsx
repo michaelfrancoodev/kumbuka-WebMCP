@@ -3,7 +3,7 @@ import { Mic, Square, Keyboard, Check, X, RotateCcw } from 'lucide-react'
 import { useLang } from '../lib/lang'
 import { useSpeech } from '../hooks/useSpeech'
 import { useRecords } from '../hooks/useRecords'
-import { parseSentence } from '../lib/parse'
+import { parseSentence, generateTitle } from '../lib/parse'
 import { isWebMCPAvailable } from '../lib/webmcp'
 import { formatTSh } from '../lib/money'
 import { Card } from '../components/ui/Card'
@@ -62,8 +62,13 @@ export function RecordPage() {
 
   async function handleConfirm() {
     if (!draft) return
+    // Regenerate the title from whatever the user actually confirmed —
+    // if they corrected the amount/person/item in the review sheet, the
+    // saved title should reflect that, not the first-pass parse.
+    const finalTitle = generateTitle(draft, draft.originalText)
     await add({
       id: crypto.randomUUID(),
+      title: finalTitle,
       type: draft.type,
       person: draft.person,
       amount: draft.amount,
@@ -111,7 +116,7 @@ export function RecordPage() {
             <button
               onClick={handleMicTap}
               className={`w-28 h-28 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                listening ? 'bg-red-500/20 border-2 border-red-400/50 animate-pulse-soft' : 'btn-primary shadow-lg'
+                listening ? 'bg-red-500/20 border-2 border-red-400/50 animate-pulse-soft' : 'btn-primary shadow-lg shadow-accent/20 ring-2 ring-accent/25'
               }`}
             >
               {listening ? <Square className="w-8 h-8 text-red-400" /> : <Mic className="w-9 h-9" />}
@@ -152,6 +157,7 @@ export function RecordPage() {
       <Sheet open={sheetOpen} onClose={closeSheet} title={t('reviewFirst')}>
         {draft && (
           <div className="flex flex-col gap-4">
+            <p className="text-sm font-medium text-white">{generateTitle(draft, draft.originalText)}</p>
             <p className="text-xs text-white/40">{t('original')}: <span className="text-white/70">"{draft.originalText}"</span></p>
 
             <div>

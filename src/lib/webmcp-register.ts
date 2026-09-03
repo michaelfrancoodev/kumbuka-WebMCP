@@ -1,6 +1,7 @@
 import { db, saveRecord, deleteRecord, getAllRecords, getRecordsByDateRange } from './db'
 import { getCurrentRange, type RangeType } from './dates'
 import { isWebMCPAvailable } from './webmcp'
+import { generateTitle } from './parse'
 import type { ActivityRecord, RecordType } from './types'
 
 function newId(): string {
@@ -37,15 +38,21 @@ export function registerWebMCPTools(): void {
     },
     execute: async (args) => {
       const type = (RECORD_TYPES.includes(args.type as RecordType) ? args.type : 'activity') as RecordType
+      const person = args.person as string | undefined
+      const amount = typeof args.amount === 'number' ? args.amount : undefined
+      const item = args.item as string | undefined
+      const unit = args.unit as string | undefined
+      const originalText = (args.note as string) || (args.item as string) || `${type} record added by agent`
       const record: ActivityRecord = {
         id: newId(),
+        title: generateTitle({ type, person, amount, item, unit }, originalText),
         type,
-        person: args.person as string | undefined,
-        amount: typeof args.amount === 'number' ? args.amount : undefined,
-        item: args.item as string | undefined,
-        unit: args.unit as string | undefined,
+        person,
+        amount,
+        item,
+        unit,
         note: args.note as string | undefined,
-        originalText: (args.note as string) || (args.item as string) || `${type} record added by agent`,
+        originalText,
         lang: 'en',
         source: 'agent',
         confirmed: true,

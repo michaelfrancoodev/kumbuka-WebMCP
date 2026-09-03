@@ -33,6 +33,14 @@ const SW_UNITS: Record<string, number> = {
   sifuri: 0, moja: 1, mbili: 2, tatu: 3, nne: 4, tano: 5,
   sita: 6, saba: 7, nane: 8, tisa: 9, kumi: 10,
 }
+// Single-digit words only (0-9). Used to detect "digit-string" readings like
+// "laki mbili nane" (2, 8 read as consecutive digits -> 280,000), which
+// miners commonly use for large sums instead of full compound numerals.
+// Deliberately excludes "kumi" (10), which isn't a single digit.
+const SW_DIGIT_ONLY: Record<string, number> = {
+  sifuri: 0, moja: 1, mbili: 2, tatu: 3, nne: 4, tano: 5,
+  sita: 6, saba: 7, nane: 8, tisa: 9,
+}
 const SW_TENS: Record<string, number> = {
   ishirini: 20, thelathini: 30, arobaini: 40, hamsini: 50,
   sitini: 60, sabini: 70, themanini: 80, tisini: 90,
@@ -41,20 +49,83 @@ const SW_SCALES: Record<string, number> = {
   elfu: 1_000, laki: 100_000, milioni: 1_000_000, million: 1_000_000,
 }
 
-function wordsToNumber(text: string): number | undefined {
-  const tokens = text.toLowerCase().split(/\s+/)
-  let base: number | undefined
-  let scale: number | undefined
+// Common speech-recognition mishearings of Swahili number words (the ASR
+// engine's language model leans English, so "laki" often comes back as an
+// English homophone like "lucky"). Normalize these before parsing amounts
+// so a mistranscribed "laki" doesn't silently disappear from the sentence.
+const ASR_NUMBER_ALIASES: Array<[RegExp, string]> = [
+  [/\b(lucky|lackey|lacky)\b/gi, 'laki'],
+]
 
-  for (const tok of tokens) {
-    const clean = tok.replace(/[.,]/g, '')
-    if (SW_SCALES[clean]) { scale = SW_SCALES[clean]; continue }
-    if (SW_TENS[clean]) { base = (base ?? 0) + SW_TENS[clean]; continue }
-    if (SW_UNITS[clean] !== undefined) { base = (base ?? 0) + SW_UNITS[clean]; continue }
+function normalizeAsrNumberQuirks(text: string): string {
+  let out = text
+  for (const [pattern, replacement] of ASR_NUMBER_ALIASES) out = out.replace(pattern, replacement)
+  return out
+}
+
+// Places a sequence of single digits starting at `scale`'s order of
+// magnitude, one decimal place lower per subsequent digit.
+// e.g. digits [2, 8] with scale 100_000 (laki) -> 200,000 + 80,000 = 280,000
+function digitRunValue(digits: number[], scale: number): number {
+  let total = 0
+  let place = scale
+  for (const d of digits) {
+    total += d * place
+    place = place / 10
+  }
+  return total
+}
+
+function wordsToNumber(rawText: string): number | undefined {
+  const text = normalizeAsrNumberQuirks(rawText)
+  const tokens = text.toLowerCase().split(/\s+/).map(t => t.replace(/[.,]/g, ''))
+
+  const scaleIdx = tokens.findIndex(t => SW_SCALES[t] !== undefined)
+
+  if (scaleIdx !== -1) {
+    const scale = SW_SCALES[tokens[scaleIdx]]
+
+    // Digit-string reading: a run of single-digit words right after the
+    // scale word ("laki mbili nane" -> 2, 8 -> 280,000). Covers the
+    // single-digit case too ("laki tatu" -> 300,000).
+    const run: number[] = []
+    for (let i = scaleIdx + 1; i < tokens.length; i++) {
+      const digit = SW_DIGIT_ONLY[tokens[i]]
+      if (digit === undefined) break
+      run.push(digit)
+    }
+    if (run.length >= 1) return digitRunValue(run, scale)
+
+    // Fallback: compound numerals that include tens/"kumi" ("elfu kumi na
+    // tano" -> 15,000) use the older additive-then-multiply reading.
+    let base: number | undefined
+    for (const tok of tokens) {
+      if (SW_TENS[tok] !== undefined) base = (base ?? 0) + SW_TENS[tok]
+      else if (SW_UNITS[tok] !== undefined) base = (base ?? 0) + SW_UNITS[tok]
+    }
+    return (base ?? 1) * scale
   }
 
-  if (base === undefined && scale === undefined) return undefined
-  return (base ?? 1) * (scale ?? 1)
+  // No explicit scale word: a run of 2+ contiguous single-digit words is
+  // read as a digit string against an implicit "laki" (hundred-thousand)
+  // leading place, matching how amounts are spoken in the field
+  // ("mbili nane" -> 280,000). A single lone digit stays a plain number
+  // (e.g. "tatu" -> 3), since that's far more likely to be a small quantity.
+  for (let i = 0; i < tokens.length; i++) {
+    if (SW_DIGIT_ONLY[tokens[i]] === undefined) continue
+    const run: number[] = []
+    let j = i
+    while (j < tokens.length && SW_DIGIT_ONLY[tokens[j]] !== undefined) { run.push(SW_DIGIT_ONLY[tokens[j]]); j++ }
+    if (run.length >= 2) return digitRunValue(run, 100_000)
+    i = j - 1
+  }
+
+  let base: number | undefined
+  for (const tok of tokens) {
+    if (SW_TENS[tok] !== undefined) base = (base ?? 0) + SW_TENS[tok]
+    else if (SW_UNITS[tok] !== undefined) base = (base ?? 0) + SW_UNITS[tok]
+  }
+  return base
 }
 
 function parseAmount(text: string): number | undefined {
@@ -142,7 +213,51 @@ export function parseSentence(text: string): ParsedDraft {
     item,
     unit,
     note: trimmed,
+    // Raw narration, verbatim, untouched — this is what "view original
+    // record" always shows, regardless of how parsing normalized it.
     originalText: trimmed,
     missing,
+    title: generateTitle({ type, person, amount, item, unit }, trimmed),
   }
+}
+
+// Short, human-scannable title generated from the structured extraction —
+// never the raw sentence itself. Falls back gracefully as fields go missing.
+export function generateTitle(
+  draft: { type: RecordType; person?: string; amount?: number; item?: string; unit?: string },
+  fallbackText: string,
+): string {
+  const { type, person, amount, item, unit } = draft
+  const amountStr = amount !== undefined ? `TSh ${amount.toLocaleString('en-US')}` : undefined
+  const itemStr = item ? capitalize(item) : undefined
+  const qty = unit ? unit : undefined
+
+  if (type === 'expense') {
+    if (itemStr && person) return `${itemStr} paid to ${person}${amountStr ? ` — ${amountStr}` : ''}`
+    if (itemStr) return `Paid for ${itemStr}${amountStr ? ` — ${amountStr}` : ''}`
+    if (person) return `Payment to ${person}${amountStr ? ` — ${amountStr}` : ''}`
+    return amountStr ? `Expense — ${amountStr}` : 'Expense recorded'
+  }
+  if (type === 'income') {
+    if (itemStr && person) return `${itemStr} sold to ${person}${amountStr ? ` — ${amountStr}` : ''}`
+    if (itemStr) return `Sold ${itemStr}${amountStr ? ` — ${amountStr}` : ''}`
+    if (person) return `Payment from ${person}${amountStr ? ` — ${amountStr}` : ''}`
+    return amountStr ? `Income — ${amountStr}` : 'Income recorded'
+  }
+  if (type === 'activity') {
+    if (itemStr && qty) return `${capitalize(qty)} of ${itemStr}`
+    if (itemStr) return `Activity — ${itemStr}`
+    return truncate(fallbackText, 42) || 'Activity logged'
+  }
+  return itemStr ? `Record — ${itemStr}` : truncate(fallbackText, 42) || 'Record saved'
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function truncate(s: string, max: number): string {
+  const clean = s.trim()
+  if (clean.length <= max) return clean
+  return clean.slice(0, max - 1).trimEnd() + '…'
 }
