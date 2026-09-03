@@ -1,0 +1,76 @@
+export type Lang = 'en' | 'sw'
+
+export const STR: Record<string, Record<Lang, string>> = {
+  appName:        { en: 'Kumbuka',                    sw: 'Kumbuka' },
+  tagline:        { en: 'Your records, in your language', sw: 'Rekodi zako, kwa lugha yako' },
+  record:         { en: 'Record',                     sw: 'Rekodi' },
+  records:        { en: 'Records',                    sw: 'Kumbukumbu' },
+  reports:        { en: 'Reports',                    sw: 'Ripoti' },
+  ask:            { en: 'Ask',                        sw: 'Uliza' },
+
+  recordDesc:     { en: 'Say or type what happened. One sentence, any language.', sw: 'Sema au andika kilichotokea. Sentensi moja, lugha yoyote.' },
+  typeDesc:       { en: 'Type what happened. One sentence, any language.',         sw: 'Andika kilichotokea. Sentensi moja, lugha yoyote.' },
+  tapToSpeak:     { en: 'Tap to speak',               sw: 'Bonyeza kusema' },
+  listening:      { en: 'Listening...',               sw: 'Inasikiliza...' },
+  stop:           { en: 'Stop',                       sw: 'Simamisha' },
+  edit:           { en: 'Edit',                       sw: 'Hariri' },
+  save:           { en: 'Save',                       sw: 'Hifadhi' },
+  cancel:         { en: 'Cancel',                     sw: 'Ghairi' },
+  delete:         { en: 'Delete',                     sw: 'Futa' },
+  discard:        { en: 'Discard',                    sw: 'Tupa' },
+  confirm:        { en: 'Confirm',                    sw: 'Thibitisha' },
+  reRecord:       { en: 'Record again',               sw: 'Rekodi tena' },
+  reviewFirst:    { en: 'Review before saving',       sw: 'Kagua kabla ya kuhifadhi' },
+
+  noRecords:      { en: 'No records yet',             sw: 'Hakuna kumbukumbu bado' },
+  noRecordsHint:  { en: 'Record or type what happened to get started', sw: 'Rekodi au andika kilichotokea kuanza' },
+
+  amount:         { en: 'Amount',                     sw: 'Kiasi' },
+  person:         { en: 'Person',                     sw: 'Mtu' },
+  type:           { en: 'Type',                       sw: 'Aina' },
+  item:           { en: 'Item',                       sw: 'Kitu' },
+  unit:           { en: 'Unit',                       sw: 'Kipimo' },
+  note:           { en: 'Note',                       sw: 'Maelezo' },
+  original:       { en: 'Original',                   sw: 'Asili' },
+  viewOriginal:   { en: 'View original',              sw: 'Tazama asili' },
+  source:         { en: 'Source',                     sw: 'Chanzo' },
+  voice:          { en: 'Voice',                      sw: 'Sauti' },
+  text:           { en: 'Text',                       sw: 'Maandishi' },
+  confirmed:      { en: 'Confirmed',                  sw: 'Imethibitishwa' },
+
+  missingAmount:  { en: 'Amount?',                    sw: 'Kiasi?' },
+  missingPerson:  { en: 'Who?',                       sw: 'Nani?' },
+  missingItem:    { en: 'What?',                      sw: 'Nini?' },
+
+  allTypes:       { en: 'All types',                  sw: 'Aina zote' },
+  clearAll:       { en: 'Clear all',                  sw: 'Futa zote' },
+  clearConfirm:   { en: 'Delete all records? This cannot be undone.', sw: 'Futa kumbukumbu zote? Hii haiwezi kurudishwa.' },
+
+  day:            { en: 'Day',                        sw: 'Siku' },
+  week:           { en: 'Week',                       sw: 'Wiki' },
+  month:          { en: 'Month',                      sw: 'Mwezi' },
+
+  totalOut:       { en: 'Money out',                  sw: 'Fedha zilizotoka' },
+  totalIn:        { en: 'Money in',                   sw: 'Fedha zilizoingia' },
+  balance:        { en: 'Balance',                    sw: 'Salio' },
+  byType:         { en: 'By type',                    sw: 'Kwa aina' },
+  topPeople:      { en: 'People',                     sw: 'Watu' },
+  noData:         { en: 'No data for this period',    sw: 'Hakuna data kwa kipindi hiki' },
+  recordsInPeriod:{ en: 'records in this period',     sw: 'kumbukumbu katika kipindi hiki' },
+  summary:        { en: 'Summary',                    sw: 'Muhtasari' },
+  overall:        { en: 'Overview',                   sw: 'Muhtasari Mkuu' },
+
+  askPlaceholder: { en: 'Ask about your records...',  sw: 'Uliza kuhusu kumbukumbu zako...' },
+  askHint:        { en: 'Ask a question about your records', sw: 'Uliza swali kuhusu kumbukumbu zako' },
+  noResults:      { en: 'No matching records found',  sw: 'Hakuna kumbukumbu zinazofanana' },
+  evidence:       { en: 'Based on these records',     sw: 'Kutokana na kumbukumbu hizi' },
+  recordsFound:   { en: 'records found',              sw: 'kumbukumbu zilizopatikana' },
+  tryAsking:      { en: 'Try asking',                 sw: 'Jaribu kuuliza' },
+
+  webmcpReady:    { en: 'WebMCP active',              sw: 'WebMCP tayari' },
+  webmcpOff:      { en: 'WebMCP not available',       sw: 'WebMCP haipatikani' },
+}
+
+export function tr(key: string, lang: Lang): string {
+  return STR[key]?.[lang] ?? key
+}
