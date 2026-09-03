@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-[#0c0c0d] text-[#ededee] font-sans antialiased;
+  }
+  ::selection { @apply bg-white/20 text-white; }
+}
+
+@layer components {
+  .surface {
+    @apply bg-white/[0.03] border border-white/[0.06] rounded-2xl;
+  }
+  .surface-hover {
+    @apply hover:bg-white/[0.06] hover:border-white/[0.12] transition-all duration-200;
+  }
+  .btn-primary {
+    @apply bg-white text-black font-medium hover:bg-white/90 active:scale-[0.98] transition-all;
+  }
+  .btn-secondary {
+    @apply bg-white/5 text-white border border-white/10 hover:bg-white/10 active:scale-[0.98] transition-all;
+  }
+  .btn-danger {
+    @apply bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-[0.98] transition-all;
+  }
+  .input {
+    @apply bg-white/[0.03] border border-white/[0.08] focus:border-white/20 focus:ring-1 focus:ring-white/10 outline-none transition-all;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .animate-in { animation: animateIn 0.3s ease-out; }
+  .animate-up { animation: animateUp 0.3s ease-out; }
+  .animate-fade { animation: animateFade 0.4s ease-out; }
+}
+
+@keyframes animateIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes animateUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes animateFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
