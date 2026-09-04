@@ -1,34 +1,74 @@
 import type { ParsedDraft, RecordType } from './types'
 
+// Money-out keywords. Includes lending money out (kukopesha) and renting
+// something in (nimekodi) — both are cash leaving the site's hand, even
+// though neither is a "purchase" in the strict sense.
 const EXPENSE_KEYWORDS = [
   'nimempa', 'nimemlipa', 'nililipa', 'nimenunua', 'nimetumia', 'gharama', 'nimelipa', 'nimetoa',
-  'nikanunua', 'nikalipa', 'nikampa', 'ninanunua', 'ninalipa',
+  'nikanunua', 'nikalipa', 'nikampa', 'ninanunua', 'ninalipa', 'nimewapa', 'nimewalipa',
+  'nimekopesha', 'nikamkopesha', 'nimemkopesha', 'ninamkopesha', 'nimewakopesha',
+  'nimekodi', 'nimelipia', 'nimemlipia', 'nimetoa mkopo', 'nimempatia mkopo',
+  'nikatoa', 'nimewalipa wafanyakazi', 'nimelipa kibarua',
   'paid', 'spent', 'bought', 'gave', 'purchase', 'purchased', 'cost', 'expense',
+  'lent', 'loaned', 'rented', 'hired', 'paid wages', 'paid workers', 'gave a loan', 'lent money',
 ]
 
+// Money-in keywords. Includes being repaid a loan/debt (amenirudishia,
+// nimerejeshewa) and renting/hiring something out (nimekodisha) — both are
+// cash coming back to the site's hand.
 const INCOME_KEYWORDS = [
   'nimepokea', 'amenilipa', 'nimeuza', 'nimepata', 'mapato', 'niliuza', 'alinilipa',
-  'nikauza', 'nikapokea', 'ninauza',
+  'nikauza', 'nikapokea', 'ninauza', 'nimelipwa', 'nikalipwa', 'wamenilipa',
+  'amenirudishia', 'wamenirudishia', 'nimerejeshewa', 'amenirejesha', 'amenilipa deni',
+  'amenilipa mkopo', 'nimekodisha', 'nikakodisha', 'nimekopa',
   'received', 'earned', 'sold', 'income', 'got paid', 'payment received',
+  'repaid', 'paid back', 'rented out', 'hired out', 'borrowed', 'loan repaid',
 ]
 
 const UNIT_WORDS = [
   'kg', 'kilo', 'kilos', 'kilogram', 'kilograms',
-  'gramu', 'gram', 'grams',
+  'gramu', 'gram', 'grams', 'pointi', 'point', 'points',
   'tani', 'ton', 'tons', 'tonne', 'tonnes',
   'mfuko', 'mifuko', 'bag', 'bags',
   'lita', 'liters', 'litres', 'litre', 'liter',
-  'ndoo', 'bucket', 'buckets',
-  'gunia', 'gunias',
+  'ndoo', 'bucket', 'buckets', 'debe', 'debes',
+  'gunia', 'gunias', 'chupa', 'bottle', 'bottles',
   'saa', 'hours', 'hour',
-  'siku', 'days', 'day',
+  'siku', 'days', 'day', 'wiki', 'week', 'weeks', 'mwezi', 'month', 'months',
+  'tripu', 'trip', 'trips', 'mzigo', 'mizigo', 'load', 'loads',
+  'roll', 'rolls', 'roli',
 ]
 
+// Item/topic hints, grouped by the kinds of activity Kumbuka needs to
+// recognize on a small-scale mining site (hasa maeneo kama Geita):
+// the mining process itself, machinery/fuel/consumables, camp/welfare
+// costs (food, water, labor), and money-movement items (loans/debts).
 const ITEM_HINTS = [
-  'mchanga', 'dhahabu', 'gold', 'mawe', 'stones', 'ore',
-  'saruji', 'cement', 'mafuta', 'diesel', 'petroli', 'petrol', 'fuel',
-  'chakula', 'food', 'maji', 'water', 'chumvi', 'sukari', 'sugar',
-  'vifaa', 'equipment', 'tools', 'zana', 'gari', 'lori', 'truck', 'lorry',
+  // Mining output / material
+  'mchanga', 'dhahabu', 'gold', 'mawe', 'stones', 'ore', 'madini', 'mineral', 'minerals',
+  'kokoto', 'changarawe', 'gravel', 'udongo', 'soil', 'tope', 'mchanga wa dhahabu',
+  'zebaki', 'mercury', 'sianidi', 'cyanide', 'shimo', 'mashimo', 'pit', 'pits', 'mgodi', 'mine',
+  'fataki', 'baruti', 'dynamite', 'explosives', 'blasting',
+  // Machinery / power / fuel
+  'mtambo', 'mitambo', 'machine', 'machinery', 'jenereta', 'generator', 'compressor',
+  'winchi', 'winch', 'crusher', 'mashine ya kusaga', 'ballmill', 'ball mill', 'sluice',
+  'pampu', 'pump', 'mabomba', 'pipe', 'pipes', 'vipuri', 'spare parts', 'spare', 'nondo',
+  'saruji', 'cement', 'mafuta', 'diesel', 'petroli', 'petrol', 'fuel', 'mafuta ya taa',
+  'kerosene', 'gesi', 'gas', 'umeme', 'electricity', 'betri', 'battery',
+  // Transport
+  'gari', 'lori', 'truck', 'lorry', 'pikipiki', 'bodaboda', 'motorbike', 'baiskeli', 'bicycle',
+  'nauli', 'fare', 'usafiri', 'transport', 'mafuta ya gari',
+  // Camp / welfare / daily needs
+  'chakula', 'food', 'maji', 'water', 'chumvi', 'sukari', 'sugar', 'mchele', 'rice',
+  'unga', 'flour', 'ugali', 'maharage', 'beans', 'soda', 'chai', 'tea', 'sabuni', 'soap',
+  'dawa', 'medicine', 'matibabu', 'treatment', 'nyumba', 'kodi ya nyumba', 'rent',
+  // Equipment / general
+  'vifaa', 'equipment', 'tools', 'zana', 'jembe', 'sururu', 'reki', 'shovel', 'pickaxe',
+  // Labor / people-money
+  'kibarua', 'kibarua cha', 'mfanyakazi', 'wafanyakazi', 'worker', 'workers', 'mshahara',
+  'wage', 'wages', 'salary', 'ajira', 'malipo', 'payment',
+  // Loans / debts
+  'mkopo', 'mikopo', 'loan', 'deni', 'madeni', 'debt', 'riba', 'interest',
 ]
 
 // Words that legitimately follow "kwa"/"na"/"to" in a sentence but are
@@ -54,6 +94,17 @@ const SW_SIGNAL_WORDS = [
   'nimenunua', 'nimetumia', 'nimelipa', 'nimetoa', 'nimepokea', 'amenilipa',
   'nimeuza', 'nimepata', 'mapato', 'niliuza', 'alinilipa', 'nikauza',
   'nikanunua', 'nikalipa', 'nikampa', 'nikapokea',
+  // Scale/number words and the newer expense/income verbs below are strong
+  // Swahili signals on their own, even in an otherwise short sentence.
+  'elfu', 'laki', 'milioni', 'sifuri', 'moja', 'mbili', 'tatu', 'nne', 'tano',
+  'sita', 'saba', 'nane', 'tisa', 'kumi', 'ishirini', 'thelathini', 'arobaini',
+  'hamsini', 'sitini', 'sabini', 'themanini', 'tisini',
+  'nimewapa', 'nimewalipa', 'nimekopesha', 'nikamkopesha', 'nimemkopesha',
+  'ninamkopesha', 'nimewakopesha', 'nimekodi', 'nimelipia', 'nimemlipia',
+  'nimelipwa', 'nikalipwa', 'wamenilipa', 'amenirudishia', 'wamenirudishia',
+  'nimerejeshewa', 'amenirejesha', 'nimekodisha', 'nikakodisha', 'nimekopa',
+  'wafanyakazi', 'mfanyakazi', 'kibarua', 'deni', 'mkopo', 'mgodi', 'dhahabu',
+  'maji', 'chakula', 'yake', 'wake',
 ]
 
 function detectLanguage(text: string): 'sw' | 'en' {
@@ -193,9 +244,13 @@ function firstTransactionClause(text: string): string {
     let m: RegExpExecArray | null
     while ((m = re.exec(lower))) positions.push(m.index)
   }
-  positions.sort((a, b) => a - b)
-  if (positions.length < 2) return text
-  return text.slice(0, positions[1]).trim()
+  // Dedupe: overlapping keywords that share a start index (e.g. "paid" and
+  // "paid workers" both matching at the same position) must count as ONE
+  // transaction marker, not two — otherwise a single transaction gets
+  // mistaken for two and its own amount/detail gets sliced off.
+  const uniquePositions = [...new Set(positions)].sort((a, b) => a - b)
+  if (uniquePositions.length < 2) return text
+  return text.slice(0, uniquePositions[1]).trim()
 }
 
 function parseAmount(text: string): number | undefined {
@@ -232,10 +287,20 @@ function parseAmount(text: string): number | undefined {
   return undefined
 }
 
+// Word-boundary keyword match — plain `.includes()` would let a shorter
+// keyword falsely match inside a longer word that has a different meaning
+// (e.g. "nimekodi" [rented, expense] matching inside "nimekodisha" [rented
+// out, income]). `\b` on both ends prevents that while still matching
+// multi-word phrases like "paid workers".
+function matchesKeyword(lower: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(lower)
+}
+
 function detectType(text: string): RecordType {
   const lower = text.toLowerCase()
-  const isExpense = EXPENSE_KEYWORDS.some(k => lower.includes(k))
-  const isIncome = INCOME_KEYWORDS.some(k => lower.includes(k))
+  const isExpense = EXPENSE_KEYWORDS.some(k => matchesKeyword(lower, k))
+  const isIncome = INCOME_KEYWORDS.some(k => matchesKeyword(lower, k))
   // A sentence can genuinely describe two transactions at once ("nimenunua
   // ... na nikauza ..." — bought at one price, sold at another). Silently
   // picking one side and labeling it "expense" produces a confidently

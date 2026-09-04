@@ -114,4 +114,83 @@ describe('parseSentence', () => {
     expect(d.title.toLowerCase()).toContain('john')
     expect(d.title).toContain('5,000')
   })
+
+  // --- Mining-site activity coverage: food, worker loans, water, rentals ---
+  // These cover the everyday cash movements around a small-scale mining
+  // site (e.g. Geita) that aren't the ore/dhahabu transaction itself:
+  // selling food to workers, lending money to a worker, buying/selling
+  // water, paying casual labor, and renting equipment out.
+
+  it('detects lending money to a worker as an expense (cash out)', () => {
+    const d = parseSentence('Nimemkopesha John elfu tano')
+    expect(d.type).toBe('expense')
+    expect(d.amount).toBe(5000)
+    expect(d.person).toBe('John')
+  })
+
+  it('detects a loan being repaid to the operator as income (cash in)', () => {
+    const d = parseSentence('Amenirudishia deni yake elfu tano')
+    expect(d.type).toBe('income')
+    expect(d.amount).toBe(5000)
+    expect(d.item).toBe('deni')
+  })
+
+  it('detects selling water as income with "maji" as the item', () => {
+    const d = parseSentence('Nimeuza maji kwa Fatuma elfu mbili')
+    expect(d.type).toBe('income')
+    expect(d.amount).toBe(2000)
+    expect(d.person).toBe('Fatuma')
+    expect(d.item).toBe('maji')
+  })
+
+  it('detects buying water as an expense with "maji" as the item', () => {
+    const d = parseSentence('Nimenunua maji kwa John elfu tatu')
+    expect(d.type).toBe('expense')
+    expect(d.amount).toBe(3000)
+    expect(d.item).toBe('maji')
+  })
+
+  it('detects selling food to workers as an expense (site buying food for the crew)', () => {
+    const d = parseSentence('Nimenunua chakula kwa wafanyakazi elfu kumi')
+    expect(d.type).toBe('expense')
+    expect(d.amount).toBe(10000)
+    expect(d.item).toBe('chakula')
+  })
+
+  it('detects paying casual labor (kibarua) as an expense', () => {
+    const d = parseSentence('Nimewalipa wafanyakazi elfu ishirini kwa kibarua')
+    expect(d.type).toBe('expense')
+    expect(d.amount).toBe(20000)
+    expect(d.item).toBe('kibarua')
+  })
+
+  it('detects renting equipment out as income, not "other" (no false double-transaction)', () => {
+    const d = parseSentence('Nimekodisha lori kwa siku tatu shilingi laki moja')
+    expect(d.type).toBe('income')
+    expect(d.amount).toBe(100_000)
+    expect(d.item).toBe('lori')
+  })
+
+  it('does not let a longer keyword falsely trigger a shorter one that is its prefix ("nimekodisha" vs "nimekodi")', () => {
+    const d = parseSentence('Nimekodisha pikipiki kwa siku mbili elfu kumi')
+    expect(d.type).toBe('income')
+  })
+
+  it('does not let two overlapping keyword matches at the same position be mistaken for two transactions', () => {
+    const d = parseSentence('I paid workers 20000 for the day')
+    expect(d.type).toBe('expense')
+    expect(d.amount).toBe(20000)
+  })
+
+  it('detects borrowing money as income (cash coming into the site)', () => {
+    const d = parseSentence('Nimekopa laki moja kwa Halima')
+    expect(d.type).toBe('income')
+    expect(d.amount).toBe(100_000)
+    expect(d.person).toBe('Halima')
+  })
+
+  it('generates a Swahili title for money-movement sentences without the older core verbs (repayment, rental)', () => {
+    const d = parseSentence('Amenirudishia deni yake elfu tano')
+    expect(generateTitle(d, d.originalText)).not.toMatch(/paid|sold|payment/i)
+  })
 })
