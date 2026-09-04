@@ -1,17 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Mic, Square, Keyboard, Check, X, RotateCcw } from 'lucide-react'
 import { useLang } from '../lib/lang'
 import { useSpeech } from '../hooks/useSpeech'
 import { useRecords } from '../hooks/useRecords'
 import { parseSentence, generateTitle } from '../lib/parse'
 import { isWebMCPAvailable } from '../lib/webmcp'
-import { formatTSh } from '../lib/money'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Sheet, Badge } from '../components/ui/Sheet'
-import type { ParsedDraft, RecordType } from '../lib/types'
-
-const TYPE_OPTIONS: RecordType[] = ['expense', 'income', 'activity', 'other']
+import { Sheet } from '../components/ui/Sheet'
+import type { ParsedDraft } from '../lib/types'
 
 export function RecordPage() {
   const { t, lang } = useLang()
@@ -21,15 +18,27 @@ export function RecordPage() {
   const [inputMode, setInputMode] = useState<'voice' | 'text'>(supported ? 'voice' : 'text')
   const [textValue, setTextValue] = useState('')
   const [draft, setDraft] = useState<ParsedDraft | null>(null)
+  // What the user sees and can correct in the review sheet. Starts as the
+  // recognized/typed sentence verbatim; editing this is the ONLY way to
+  // change what gets saved — there are no separate person/amount/item
+  // fields to keep in sync, so nothing can drift out of agreement with it.
+  const [editedText, setEditedText] = useState('')
   const [sheetOpen, setSheetOpen] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [source, setSource] = useState<'voice' | 'text'>('text')
+
+  // Re-parse live as the user corrects the text, so the "what we understood"
+  // preview always reflects exactly what's in the box, in any language —
+  // nothing from the sentence is dropped, since the full text is always kept
+  // verbatim as the record's note/originalText regardless of parsing.
+  const liveDraft = useMemo(() => (sheetOpen ? parseSentence(editedText) : null), [sheetOpen, editedText])
 
   // When voice recognition stops with a transcript, parse it and open the review sheet.
   useEffect(() => {
     if (!listening && transcript.trim().length > 0) {
       const parsed = parseSentence(transcript)
       setDraft(parsed)
+      setEditedText(transcript.trim())
       setSource('voice')
       setSheetOpen(true)
     }
@@ -49,6 +58,7 @@ export function RecordPage() {
     if (!textValue.trim()) return
     const parsed = parseSentence(textValue)
     setDraft(parsed)
+    setEditedText(textValue.trim())
     setSource('text')
     setSheetOpen(true)
   }
@@ -56,26 +66,29 @@ export function RecordPage() {
   function closeSheet() {
     setSheetOpen(false)
     setDraft(null)
+    setEditedText('')
     setTextValue('')
     reset()
   }
 
   async function handleConfirm() {
-    if (!draft) return
-    // Regenerate the title from whatever the user actually confirmed —
-    // if they corrected the amount/person/item in the review sheet, the
-    // saved title should reflect that, not the first-pass parse.
-    const finalTitle = generateTitle(draft, draft.originalText)
+    const finalText = editedText.trim()
+    if (!finalText) return
+    // Always re-parse from whatever text the user actually confirmed in the
+    // review box — that's the single source of truth, so the saved record
+    // (and its title) can never disagree with what's on screen.
+    const final = parseSentence(finalText)
+    const finalTitle = generateTitle(final, final.originalText)
     await add({
       id: crypto.randomUUID(),
       title: finalTitle,
-      type: draft.type,
-      person: draft.person,
-      amount: draft.amount,
-      item: draft.item,
-      unit: draft.unit,
-      note: draft.note,
-      originalText: draft.originalText,
+      type: final.type,
+      person: final.person,
+      amount: final.amount,
+      item: final.item,
+      unit: final.unit,
+      note: final.note,
+      originalText: final.originalText,
       lang,
       source,
       confirmed: true,
@@ -155,48 +168,23 @@ export function RecordPage() {
       )}
 
       <Sheet open={sheetOpen} onClose={closeSheet} title={t('reviewFirst')}>
-        {draft && (
+        {draft && liveDraft && (
           <div className="flex flex-col gap-4">
-            <p className="text-sm font-medium text-white">{generateTitle(draft, draft.originalText)}</p>
-            <p className="text-xs text-white/40">{t('original')}: <span className="text-white/70">"{draft.originalText}"</span></p>
+            {/* What the agent understood — a live preview, not editable here.
+                It updates as the text below is corrected, so the user can
+                confirm at a glance whether the correction "took". */}
+            <p className="text-sm font-medium text-white">{generateTitle(liveDraft, liveDraft.originalText)}</p>
 
             <div>
-              <label className="text-xs text-white/50 mb-1.5 block">{t('type')}</label>
-              <div className="flex flex-wrap gap-2">
-                {TYPE_OPTIONS.map(opt => (
-                  <button
-                    key={opt}
-                    onClick={() => setDraft({ ...draft, type: opt })}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      draft.type === opt ? 'bg-white text-black border-white' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
+              <label className="text-xs text-white/50 mb-1.5 block">{t('original')}</label>
+              <textarea
+                value={editedText}
+                onChange={e => setEditedText(e.target.value)}
+                rows={3}
+                autoFocus
+                className="input w-full rounded-xl px-4 py-3 text-sm text-white resize-none"
+              />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t('person')} placeholder={t('missingPerson')} value={draft.person ?? ''} onChange={v => setDraft({ ...draft, person: v || undefined })} />
-              <Field label={t('amount')} placeholder={t('missingAmount')} value={draft.amount?.toString() ?? ''} onChange={v => setDraft({ ...draft, amount: v ? Number(v) : undefined })} type="number" />
-              <Field label={t('item')} placeholder={t('missingItem')} value={draft.item ?? ''} onChange={v => setDraft({ ...draft, item: v || undefined })} />
-              <Field label={t('unit')} value={draft.unit ?? ''} onChange={v => setDraft({ ...draft, unit: v || undefined })} />
-            </div>
-
-            {draft.amount !== undefined && (
-              <p className="text-sm text-white/60">{formatTSh(draft.amount)}</p>
-            )}
-
-            {draft.missing.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {draft.missing.map(m => (
-                  <Badge key={m} className="bg-amber-500/10 text-amber-300 border-amber-500/20">
-                    {m === 'amount' ? t('missingAmount') : m === 'person' ? t('missingPerson') : t('missingItem')}
-                  </Badge>
-                ))}
-              </div>
-            )}
 
             <div className="flex gap-2 pt-2">
               <Button variant="secondary" onClick={closeSheet} full>
@@ -207,28 +195,13 @@ export function RecordPage() {
                   <RotateCcw className="w-4 h-4" />
                 </Button>
               )}
-              <Button onClick={handleConfirm} full>
+              <Button onClick={handleConfirm} full disabled={!editedText.trim()}>
                 <Check className="w-4 h-4" /> {t('confirm')}
               </Button>
             </div>
           </div>
         )}
       </Sheet>
-    </div>
-  )
-}
-
-function Field({ label, value, onChange, placeholder, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-  return (
-    <div>
-      <label className="text-xs text-white/50 mb-1.5 block">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="input w-full rounded-lg px-3 py-2 text-sm text-white"
-      />
     </div>
   )
 }
