@@ -145,7 +145,13 @@ export function ReportsPage() {
       </div>
 
       {inRange.length === 0 ? (
-        <p className="text-white/30 text-sm text-center py-16">{t('noData')}</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
+            <CalendarDays className="w-5 h-5 text-white/20" />
+          </div>
+          <p className="text-white/40 text-sm font-medium">{t('noData')}</p>
+          <p className="text-white/25 text-xs mt-1">{range.label}</p>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3 mb-6">
@@ -185,23 +191,23 @@ export function ReportsPage() {
               )}
             </Card>
           </div>
-        </>
-      )}
 
-      {rangeType === 'day' ? (
-        <DayRecordList records={inRange} />
-      ) : (
-        <>
-          <h2 className="text-sm font-medium text-white/70 mb-3">{t('dailyBreakdown')}</h2>
-          <div className="flex flex-col gap-2">
-            {days.map(day => (
-              <DayAccordion
-                key={day.getTime()}
-                day={day}
-                records={inRange.filter(r => r.createdAt >= startOfDay(day).getTime() && r.createdAt <= endOfDay(day).getTime())}
-              />
-            ))}
-          </div>
+          {rangeType === 'day' ? (
+            <DayRecordList records={inRange} />
+          ) : (
+            <>
+              <h2 className="text-sm font-medium text-white/70 mb-3">{t('dailyBreakdown')}</h2>
+              <div className="flex flex-col gap-2">
+                {days.map(day => (
+                  <DayAccordion
+                    key={day.getTime()}
+                    day={day}
+                    records={inRange.filter(r => r.createdAt >= startOfDay(day).getTime() && r.createdAt <= endOfDay(day).getTime())}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

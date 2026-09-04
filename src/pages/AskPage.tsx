@@ -5,27 +5,17 @@ import { useLang } from '../lib/lang'
 import { useRecords } from '../hooks/useRecords'
 import { formatTSh } from '../lib/money'
 import { formatDate, formatTime } from '../lib/dates'
+import { runQuery, buildSuggestions } from '../lib/query'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Sheet'
-
-const SUGGESTIONS = ['diesel', 'John', 'this week', 'cement']
 
 export function AskPage() {
   const { t } = useLang()
   const { records } = useRecords()
   const [query, setQuery] = useState('')
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
-    return records.filter(r =>
-      r.originalText.toLowerCase().includes(q) ||
-      r.person?.toLowerCase().includes(q) ||
-      r.item?.toLowerCase().includes(q) ||
-      r.note?.toLowerCase().includes(q) ||
-      r.type.toLowerCase().includes(q),
-    )
-  }, [records, query])
+  const { records: results, dateLabelKey, answer } = useMemo(() => runQuery(query, records), [query, records])
+  const suggestions = useMemo(() => buildSuggestions(records), [records])
 
   const totalAmount = results.reduce((s, r) => s + (r.amount || 0), 0)
 
@@ -46,15 +36,18 @@ export function AskPage() {
       {!query && (
         <div className="flex flex-wrap gap-2 mb-6">
           <span className="text-xs text-white/30 mr-1 self-center">{t('tryAsking')}:</span>
-          {SUGGESTIONS.map(s => (
-            <button
-              key={s}
-              onClick={() => setQuery(s)}
-              className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 transition-colors"
-            >
-              {s}
-            </button>
-          ))}
+          {suggestions.map((s, i) => {
+            const label = s.kind === 'literal' ? s.value : s.kind === 'today' ? t('today') : t('thisWeek')
+            return (
+              <button
+                key={i}
+                onClick={() => setQuery(label)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:border-white/20 transition-colors"
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -64,6 +57,23 @@ export function AskPage() {
             <p className="text-white/30 text-sm text-center py-16">{t('noResults')}</p>
           ) : (
             <>
+              {dateLabelKey && (
+                <p className="text-xs text-white/30 mb-3">{t('showingFor')} <span className="text-white/60">{t(dateLabelKey)}</span></p>
+              )}
+
+              {answer && (
+                <Card className="p-4 mb-4 border-accent/20 bg-accent/[0.04]">
+                  <div className="grid grid-cols-2 gap-4">
+                    {answer.map(a => (
+                      <div key={a.labelKey}>
+                        <p className="text-xs text-white/40 mb-1">{t(a.labelKey)}</p>
+                        <p className="text-sm font-semibold text-white">{a.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs text-white/40">
                   {results.length} {t('recordsFound')}

@@ -74,6 +74,12 @@ export const STR: Record<string, Record<Lang, string>> = {
   evidence:       { en: 'Based on these records',     sw: 'Kutokana na kumbukumbu hizi' },
   recordsFound:   { en: 'records found',              sw: 'kumbukumbu zilizopatikana' },
   tryAsking:      { en: 'Try asking',                 sw: 'Jaribu kuuliza' },
+  yesterday:      { en: 'yesterday',                  sw: 'jana' },
+  thisWeek:       { en: 'this week',                  sw: 'wiki hii' },
+  thisMonth:      { en: 'this month',                 sw: 'mwezi huu' },
+  avgBuyPrice:    { en: 'Avg. buy price',              sw: 'Bei ya wastani ya kununua' },
+  avgSellPrice:   { en: 'Avg. sell price',             sw: 'Bei ya wastani ya kuuza' },
+  showingFor:     { en: 'Showing for',                 sw: 'Inaonesha kwa' },
 
   webmcpReady:    { en: 'WebMCP active',              sw: 'WebMCP tayari' },
   webmcpOff:      { en: 'WebMCP not available',       sw: 'WebMCP haipatikani' },
