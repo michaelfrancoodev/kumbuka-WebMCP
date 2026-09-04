@@ -63,6 +63,10 @@ export const STR: Record<string, Record<Lang, string>> = {
   dailyBreakdown: { en: 'Daily breakdown',             sw: 'Mchanganuo wa kila siku' },
   noRecordsForDay:{ en: 'No records this day',        sw: 'Hakuna kumbukumbu siku hii' },
   today:          { en: 'Today',                      sw: 'Leo' },
+  filterAll:      { en: 'All',                        sw: 'Zote' },
+  type_expense:   { en: 'Expense',                    sw: 'Matumizi' },
+  type_income:    { en: 'Income',                     sw: 'Mapato' },
+  type_activity:  { en: 'Activity',                   sw: 'Shughuli' },
 
   askPlaceholder: { en: 'Ask about your records...',  sw: 'Uliza kuhusu kumbukumbu zako...' },
   askHint:        { en: 'Ask a question about your records', sw: 'Uliza swali kuhusu kumbukumbu zako' },

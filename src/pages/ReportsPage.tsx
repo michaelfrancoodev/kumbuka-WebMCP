@@ -7,20 +7,23 @@ import { useRecords } from '../hooks/useRecords'
 import { formatTSh } from '../lib/money'
 import {
   getCurrentRange, shiftRange, eachDayInRange, startOfDay, endOfDay, formatTime,
-  toIsoDateInput, fromIsoDateInput, toIsoWeekInput, fromIsoWeekInput, toIsoMonthInput, fromIsoMonthInput,
   type RangeType,
 } from '../lib/dates'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Sheet'
-import type { ActivityRecord } from '../lib/types'
+import { CalendarPopover } from '../components/ui/CalendarPopover'
+import type { ActivityRecord, RecordType } from '../lib/types'
 
 const RANGE_OPTIONS: RangeType[] = ['day', 'week', 'month']
+const TYPE_FILTERS: Array<RecordType | 'all'> = ['all', 'expense', 'income', 'activity']
 
 export function ReportsPage() {
   const { t } = useLang()
   const { records } = useRecords()
   const [rangeType, setRangeType] = useState<RangeType>('week')
   const [range, setRange] = useState(() => getCurrentRange('week'))
+  const [typeFilter, setTypeFilter] = useState<RecordType | 'all'>('all')
+  const [calendarOpen, setCalendarOpen] = useState(false)
 
   function changeRangeType(rt: RangeType) {
     setRangeType(rt)
@@ -35,28 +38,21 @@ export function ReportsPage() {
     setRange(getCurrentRange(rangeType))
   }
 
-  function handlePickerChange(value: string) {
-    let picked: Date | undefined
-    if (rangeType === 'day') picked = fromIsoDateInput(value)
-    else if (rangeType === 'week') picked = fromIsoWeekInput(value)
-    else picked = fromIsoMonthInput(value)
-    if (picked) setRange(getCurrentRange(rangeType, picked))
+  function handleCalendarSelect(picked: Date) {
+    setRange(getCurrentRange(rangeType, picked))
+    setCalendarOpen(false)
   }
 
-  const pickerValue =
-    rangeType === 'day' ? toIsoDateInput(range.start)
-    : rangeType === 'week' ? toIsoWeekInput(range.start)
-    : toIsoMonthInput(range.start)
-  const pickerType = rangeType === 'day' ? 'date' : rangeType === 'week' ? 'week' : 'month'
-
-  // Every record whose createdAt falls inside the selected range, oldest first —
-  // one consistent chronological order used throughout day/week/month views.
+  // Every record whose createdAt falls inside the selected range and matches
+  // the active type filter, oldest first — one consistent chronological
+  // order used throughout day/week/month views.
   const inRange = useMemo(
     () =>
       records
         .filter(r => r.createdAt >= range.start.getTime() && r.createdAt <= range.end.getTime())
+        .filter(r => typeFilter === 'all' || r.type === typeFilter)
         .sort((a, b) => a.createdAt - b.createdAt),
-    [records, range],
+    [records, range, typeFilter],
   )
 
   const totalOut = inRange.filter(r => r.type === 'expense').reduce((s, r) => s + (r.amount || 0), 0)
@@ -108,20 +104,45 @@ export function ReportsPage() {
           <button onClick={() => shift(1)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/50" aria-label="next">
             <ChevronRight className="w-4 h-4" />
           </button>
-          <label className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs cursor-pointer hover:bg-white/10 transition-colors">
-            <CalendarDays className="w-3.5 h-3.5" />
-            {t('jumpTo')}
-            <input
-              type={pickerType}
-              value={pickerValue}
-              onChange={e => handlePickerChange(e.target.value)}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-          </label>
+          <div className="relative">
+            <button
+              onClick={() => setCalendarOpen(o => !o)}
+              className={clsx(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-colors',
+                calendarOpen ? 'bg-accent/10 border-accent/30 text-accent-light' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10',
+              )}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              {t('jumpTo')}
+            </button>
+            {calendarOpen && (
+              <CalendarPopover
+                mode={rangeType}
+                value={range.start}
+                onSelect={handleCalendarSelect}
+                onClose={() => setCalendarOpen(false)}
+              />
+            )}
+          </div>
         </div>
       </div>
 
-      <p className="text-sm text-white/50 mb-6">{range.label} · {range.sublabel}</p>
+      <p className="text-sm text-white/50 mb-4">{range.label} · {range.sublabel}</p>
+
+      <div className="flex gap-1.5 mb-6">
+        {TYPE_FILTERS.map(tf => (
+          <button
+            key={tf}
+            onClick={() => setTypeFilter(tf)}
+            className={clsx(
+              'px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors',
+              typeFilter === tf ? 'bg-accent/15 text-accent-light border border-accent/30' : 'text-white/40 hover:text-white/70 border border-transparent',
+            )}
+          >
+            {tf === 'all' ? t('filterAll') : t(`type_${tf}`)}
+          </button>
+        ))}
+      </div>
 
       {inRange.length === 0 ? (
         <p className="text-white/30 text-sm text-center py-16">{t('noData')}</p>

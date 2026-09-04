@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { clsx } from 'clsx'
 import { LangProvider, useLang } from './lib/lang'
 import { Sidebar, BottomNav } from './components/shell/Nav'
 import { RecordPage } from './pages/RecordPage'
@@ -10,14 +11,23 @@ import { AskPage } from './pages/AskPage'
 import { registerWebMCPTools } from './lib/webmcp-register'
 
 function LangToggle() {
-  const { lang, toggle } = useLang()
+  const { lang, setLang } = useLang()
   return (
-    <button
-      onClick={toggle}
-      className="px-3 py-1.5 surface surface-hover rounded-lg text-xs font-medium text-white/60 hover:text-white transition-colors"
-    >
-      {lang === 'en' ? 'SW' : 'EN'}
-    </button>
+    <div className="flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5 text-xs font-medium">
+      {(['en', 'sw'] as const).map(l => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          className={clsx(
+            'px-2.5 py-1 rounded-md transition-colors',
+            lang === l ? 'bg-accent text-black' : 'text-white/50 hover:text-white',
+          )}
+          aria-pressed={lang === l}
+        >
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </div>
   )
 }
 
