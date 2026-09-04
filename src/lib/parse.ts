@@ -2,16 +2,19 @@ import type { ParsedDraft, RecordType } from './types'
 
 const EXPENSE_KEYWORDS = [
   'nimempa', 'nimemlipa', 'nililipa', 'nimenunua', 'nimetumia', 'gharama', 'nimelipa', 'nimetoa',
+  'nikanunua', 'nikalipa', 'nikampa', 'ninanunua', 'ninalipa',
   'paid', 'spent', 'bought', 'gave', 'purchase', 'purchased', 'cost', 'expense',
 ]
 
 const INCOME_KEYWORDS = [
   'nimepokea', 'amenilipa', 'nimeuza', 'nimepata', 'mapato', 'niliuza', 'alinilipa',
+  'nikauza', 'nikapokea', 'ninauza',
   'received', 'earned', 'sold', 'income', 'got paid', 'payment received',
 ]
 
 const UNIT_WORDS = [
   'kg', 'kilo', 'kilos', 'kilogram', 'kilograms',
+  'gramu', 'gram', 'grams',
   'tani', 'ton', 'tons', 'tonne', 'tonnes',
   'mfuko', 'mifuko', 'bag', 'bags',
   'lita', 'liters', 'litres', 'litre', 'liter',
@@ -27,6 +30,36 @@ const ITEM_HINTS = [
   'chakula', 'food', 'maji', 'water', 'chumvi', 'sukari', 'sugar',
   'vifaa', 'equipment', 'tools', 'zana', 'gari', 'lori', 'truck', 'lorry',
 ]
+
+// Words that legitimately follow "kwa"/"na"/"to" in a sentence but are
+// never themselves a person's name — currency, country/region names, and
+// generic nouns. Without this, "kwa tanzania shilingi..." was being
+// misread as a person named "Tanzania". Kept separate from ITEM_HINTS/
+// UNIT_WORDS/number words below, which are already excluded structurally.
+const NON_PERSON_WORDS = [
+  'tanzania', 'tsh', 'shilingi', 'shillingi', 'shilling', 'fedha', 'pesa',
+  'dola', 'dollar', 'dollars', 'euro', 'kenya', 'uganda', 'rwanda',
+  'burundi', 'congo', 'zambia', 'malawi', 'msumbiji', 'mozambique',
+  'kila', 'yote', 'wote', 'hivyo', 'hiyo', 'huyo', 'yeye', 'sisi', 'wewe',
+  'mimi', 'wao', 'gramu', 'kilo', 'kila', 'leo', 'jana', 'kesho',
+]
+
+// Minimal signal for "which language was this sentence spoken/typed in" —
+// used only to pick which language to render the generated title in, so a
+// Swahili narration doesn't come back with an English title (or vice
+// versa) regardless of what the app's UI toggle currently happens to be.
+const SW_SIGNAL_WORDS = [
+  'na', 'ya', 'wa', 'kwa', 'ni', 'za', 'la', 'cha', 'vya', 'kila', 'leo',
+  'jana', 'kesho', 'shilingi', 'gramu', 'nimempa', 'nimemlipa', 'nililipa',
+  'nimenunua', 'nimetumia', 'nimelipa', 'nimetoa', 'nimepokea', 'amenilipa',
+  'nimeuza', 'nimepata', 'mapato', 'niliuza', 'alinilipa', 'nikauza',
+  'nikanunua', 'nikalipa', 'nikampa', 'nikapokea',
+]
+
+function detectLanguage(text: string): 'sw' | 'en' {
+  const tokens = text.toLowerCase().split(/\s+/).map(t => t.replace(/[.,!?]/g, ''))
+  return tokens.some(t => SW_SIGNAL_WORDS.includes(t)) ? 'sw' : 'en'
+}
 
 // Small Swahili word-number map, enough for common spoken amounts.
 const SW_UNITS: Record<string, number> = {
@@ -76,34 +109,52 @@ function digitRunValue(digits: number[], scale: number): number {
   return total
 }
 
+// Computes the value of one "SCALE_WORD ...trailing number words..." chunk,
+// e.g. tokens=['mbili'] scale=100_000 -> 200_000 (digit-string reading),
+// or tokens=['kumi','tano'] scale=1_000 -> 15_000 (additive tens/units
+// reading). Tries the digit-string reading first since it's unambiguous
+// only when it actually matches consecutive single digits; falls back to
+// additive tens+units otherwise.
+function computeScaleChunk(tokensAfterScale: string[], scale: number): number {
+  const run: number[] = []
+  for (const tok of tokensAfterScale) {
+    const digit = SW_DIGIT_ONLY[tok]
+    if (digit === undefined) break
+    run.push(digit)
+  }
+  if (run.length >= 1) return digitRunValue(run, scale)
+
+  let base: number | undefined
+  for (const tok of tokensAfterScale) {
+    if (SW_TENS[tok] !== undefined) base = (base ?? 0) + SW_TENS[tok]
+    else if (SW_UNITS[tok] !== undefined) base = (base ?? 0) + SW_UNITS[tok]
+  }
+  return (base ?? 1) * scale
+}
+
 function wordsToNumber(rawText: string): number | undefined {
   const text = normalizeAsrNumberQuirks(rawText)
   const tokens = text.toLowerCase().split(/\s+/).map(t => t.replace(/[.,]/g, ''))
 
-  const scaleIdx = tokens.findIndex(t => SW_SCALES[t] !== undefined)
+  const scaleIdxs: number[] = []
+  tokens.forEach((t, i) => { if (SW_SCALES[t] !== undefined) scaleIdxs.push(i) })
 
-  if (scaleIdx !== -1) {
-    const scale = SW_SCALES[tokens[scaleIdx]]
-
-    // Digit-string reading: a run of single-digit words right after the
-    // scale word ("laki mbili nane" -> 2, 8 -> 280,000). Covers the
-    // single-digit case too ("laki tatu" -> 300,000).
-    const run: number[] = []
-    for (let i = scaleIdx + 1; i < tokens.length; i++) {
-      const digit = SW_DIGIT_ONLY[tokens[i]]
-      if (digit === undefined) break
-      run.push(digit)
+  if (scaleIdxs.length > 0) {
+    // Sum every "SCALE_WORD ...trailing number words..." chunk found in the
+    // text. This covers not just a single scale word, but compound sums
+    // stated as two scale terms in one breath — e.g. "laki mbili na elfu
+    // ishirini na nane" (200,000 + 28,000 = 228,000), a very common way of
+    // stating large amounts in the field that a single-scale reading used
+    // to silently truncate to just the first term (200,000).
+    let total = 0
+    for (let c = 0; c < scaleIdxs.length; c++) {
+      const idx = scaleIdxs[c]
+      const nextIdx = scaleIdxs[c + 1] ?? tokens.length
+      const scale = SW_SCALES[tokens[idx]]
+      const chunkTokens = tokens.slice(idx + 1, nextIdx).filter(t => t !== 'na')
+      total += computeScaleChunk(chunkTokens, scale)
     }
-    if (run.length >= 1) return digitRunValue(run, scale)
-
-    // Fallback: compound numerals that include tens/"kumi" ("elfu kumi na
-    // tano" -> 15,000) use the older additive-then-multiply reading.
-    let base: number | undefined
-    for (const tok of tokens) {
-      if (SW_TENS[tok] !== undefined) base = (base ?? 0) + SW_TENS[tok]
-      else if (SW_UNITS[tok] !== undefined) base = (base ?? 0) + SW_UNITS[tok]
-    }
-    return (base ?? 1) * scale
+    return total
   }
 
   // No explicit scale word: a run of 2+ contiguous single-digit words is
@@ -128,15 +179,36 @@ function wordsToNumber(rawText: string): number | undefined {
   return base
 }
 
+// When a sentence describes more than one transaction ("nimenunua ... na
+// nikauza ..."), an amount/scale word can appear on both sides. Scope
+// amount parsing to the first-mentioned transaction's clause only, so a
+// buy price and a sell price don't get summed together into a number
+// that means nothing.
+function firstTransactionClause(text: string): string {
+  const lower = text.toLowerCase()
+  const positions: number[] = []
+  for (const kw of [...EXPENSE_KEYWORDS, ...INCOME_KEYWORDS]) {
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`\\b${escaped}\\b`, 'g')
+    let m: RegExpExecArray | null
+    while ((m = re.exec(lower))) positions.push(m.index)
+  }
+  positions.sort((a, b) => a - b)
+  if (positions.length < 2) return text
+  return text.slice(0, positions[1]).trim()
+}
+
 function parseAmount(text: string): number | undefined {
+  const scoped = firstTransactionClause(text)
+
   // 1) "5k" / "5.5k" shorthand — the suffix letter is directly attached to the digits,
   //    so a word boundary after it is enough to avoid matching unrelated words.
-  const kMatch = text.match(/(\d+(?:\.\d+)?)\s*k\b/i)
+  const kMatch = scoped.match(/(\d+(?:\.\d+)?)\s*k\b/i)
   if (kMatch) return parseFloat(kMatch[1]) * 1_000
 
   // 2) Digits followed by a separate scale word (mandatory space + word boundary,
   //    so "5000 kwa diesel" does NOT mistake "kwa" for the "k" suffix).
-  const scaleMatch = text.match(/(\d[\d,]*\.?\d*)\s+(elfu|laki|milioni|million)\b/i)
+  const scaleMatch = scoped.match(/(\d[\d,]*\.?\d*)\s+(elfu|laki|milioni|million)\b/i)
   if (scaleMatch) {
     const raw = parseFloat(scaleMatch[1].replace(/,/g, ''))
     if (!Number.isNaN(raw)) {
@@ -147,14 +219,14 @@ function parseAmount(text: string): number | undefined {
   }
 
   // 3) Plain digits with no scale word.
-  const plainMatch = text.match(/\d[\d,]*\.?\d*/)
+  const plainMatch = scoped.match(/\d[\d,]*\.?\d*/)
   if (plainMatch) {
     const raw = parseFloat(plainMatch[0].replace(/,/g, ''))
     if (!Number.isNaN(raw)) return raw
   }
 
   // 4) Spelled-out Swahili numbers ("elfu tano" -> 5000)
-  const worded = wordsToNumber(text)
+  const worded = wordsToNumber(scoped)
   if (worded) return worded
 
   return undefined
@@ -162,8 +234,17 @@ function parseAmount(text: string): number | undefined {
 
 function detectType(text: string): RecordType {
   const lower = text.toLowerCase()
-  if (EXPENSE_KEYWORDS.some(k => lower.includes(k))) return 'expense'
-  if (INCOME_KEYWORDS.some(k => lower.includes(k))) return 'income'
+  const isExpense = EXPENSE_KEYWORDS.some(k => lower.includes(k))
+  const isIncome = INCOME_KEYWORDS.some(k => lower.includes(k))
+  // A sentence can genuinely describe two transactions at once ("nimenunua
+  // ... na nikauza ..." — bought at one price, sold at another). Silently
+  // picking one side and labeling it "expense" produces a confidently
+  // wrong record. Be honest about it instead: 'other' with the full
+  // sentence kept as the title (see generateTitle) rather than a
+  // one-sided amount/person that doesn't represent what was said.
+  if (isExpense && isIncome) return 'other'
+  if (isExpense) return 'expense'
+  if (isIncome) return 'income'
   return 'activity'
 }
 
@@ -183,13 +264,31 @@ function detectPerson(text: string): string | undefined {
   const words = text.split(/\s+/)
   for (let i = 1; i < words.length; i++) {
     const w = words[i].replace(/[.,!?]/g, '')
-    if (/^[A-Z][a-z]+$/.test(w) && !UNIT_WORDS.includes(w.toLowerCase())) {
+    if (/^[A-Z][a-z]+$/.test(w) && !UNIT_WORDS.includes(w.toLowerCase()) && !NON_PERSON_WORDS.includes(w.toLowerCase())) {
       return w
     }
   }
-  // Fallback: word right after "kwa" / "to" / "na"
-  const prepMatch = text.match(/\b(?:kwa|to|na)\s+([A-Za-z]+)/i)
-  if (prepMatch) return prepMatch[1]
+  // Fallback: word right after "kwa" / "to" / "na" — but only ever a
+  // plausible name, never a currency, country, unit, item, or number word
+  // that just happens to sit in that slot (e.g. "kwa tanzania shilingi...").
+  const prepMatches = text.matchAll(/\b(?:kwa|to|na)\s+([A-Za-z]+)/gi)
+  for (const m of prepMatches) {
+    const candidate = m[1]
+    const lower = candidate.toLowerCase()
+    if (
+      NON_PERSON_WORDS.includes(lower) ||
+      UNIT_WORDS.includes(lower) ||
+      ITEM_HINTS.includes(lower) ||
+      SW_SCALES[lower] !== undefined ||
+      SW_TENS[lower] !== undefined ||
+      SW_UNITS[lower] !== undefined ||
+      EXPENSE_KEYWORDS.includes(lower) ||
+      INCOME_KEYWORDS.includes(lower)
+    ) {
+      continue
+    }
+    return candidate
+  }
   return undefined
 }
 
@@ -223,33 +322,62 @@ export function parseSentence(text: string): ParsedDraft {
 
 // Short, human-scannable title generated from the structured extraction —
 // never the raw sentence itself. Falls back gracefully as fields go missing.
+// Renders in whichever language the sentence itself was spoken/typed in
+// (auto-detected from the text), not the app's UI toggle — a Swahili
+// narration should always get a Swahili title, regardless of what language
+// the rest of the screen happens to be in at that moment.
 export function generateTitle(
   draft: { type: RecordType; person?: string; amount?: number; item?: string; unit?: string },
   fallbackText: string,
 ): string {
   const { type, person, amount, item, unit } = draft
+  const lang = detectLanguage(fallbackText)
   const amountStr = amount !== undefined ? `TSh ${amount.toLocaleString('en-US')}` : undefined
   const itemStr = item ? capitalize(item) : undefined
   const qty = unit ? unit : undefined
 
   if (type === 'expense') {
+    if (lang === 'sw') {
+      if (itemStr && person) return `${itemStr} kwa ${person}${amountStr ? ` — ${amountStr}` : ''}`
+      if (itemStr) return `Malipo ya ${itemStr}${amountStr ? ` — ${amountStr}` : ''}`
+      if (person) return `Malipo kwa ${person}${amountStr ? ` — ${amountStr}` : ''}`
+      return amountStr ? `Matumizi — ${amountStr}` : 'Matumizi yamerekodiwa'
+    }
     if (itemStr && person) return `${itemStr} paid to ${person}${amountStr ? ` — ${amountStr}` : ''}`
     if (itemStr) return `Paid for ${itemStr}${amountStr ? ` — ${amountStr}` : ''}`
     if (person) return `Payment to ${person}${amountStr ? ` — ${amountStr}` : ''}`
     return amountStr ? `Expense — ${amountStr}` : 'Expense recorded'
   }
   if (type === 'income') {
+    if (lang === 'sw') {
+      if (itemStr && person) return `${itemStr} imeuzwa kwa ${person}${amountStr ? ` — ${amountStr}` : ''}`
+      if (itemStr) return `${itemStr} imeuzwa${amountStr ? ` — ${amountStr}` : ''}`
+      if (person) return `Malipo kutoka kwa ${person}${amountStr ? ` — ${amountStr}` : ''}`
+      return amountStr ? `Mapato — ${amountStr}` : 'Mapato yamerekodiwa'
+    }
     if (itemStr && person) return `${itemStr} sold to ${person}${amountStr ? ` — ${amountStr}` : ''}`
     if (itemStr) return `Sold ${itemStr}${amountStr ? ` — ${amountStr}` : ''}`
     if (person) return `Payment from ${person}${amountStr ? ` — ${amountStr}` : ''}`
     return amountStr ? `Income — ${amountStr}` : 'Income recorded'
   }
   if (type === 'activity') {
+    if (lang === 'sw') {
+      if (itemStr && qty) return `${capitalize(qty)} za ${itemStr}`
+      if (itemStr) return `Shughuli — ${itemStr}`
+      return truncate(fallbackText, 60) || 'Shughuli imerekodiwa'
+    }
     if (itemStr && qty) return `${capitalize(qty)} of ${itemStr}`
     if (itemStr) return `Activity — ${itemStr}`
     return truncate(fallbackText, 42) || 'Activity logged'
   }
-  return itemStr ? `Record — ${itemStr}` : truncate(fallbackText, 42) || 'Record saved'
+  // 'other' — including sentences that describe more than one transaction
+  // at once (e.g. a purchase and a sale in the same breath), where picking
+  // a single type/amount/person would misrepresent what was actually said.
+  // The full original sentence is the only honest title in that case.
+  if (lang === 'sw') {
+    return itemStr ? `Rekodi — ${itemStr}` : truncate(fallbackText, 60) || 'Rekodi imehifadhiwa'
+  }
+  return itemStr ? `Record — ${itemStr}` : truncate(fallbackText, 60) || 'Record saved'
 }
 
 function capitalize(s: string): string {

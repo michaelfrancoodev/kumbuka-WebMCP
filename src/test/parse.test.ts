@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSentence } from '../lib/parse'
+import { parseSentence, generateTitle } from '../lib/parse'
 
 describe('parseSentence', () => {
   it('detects an expense with digit amount and person', () => {
@@ -58,6 +58,43 @@ describe('parseSentence', () => {
   it('parses compound numerals with tens after a scale word ("elfu kumi na tano" -> 15,000)', () => {
     const d = parseSentence('nimelipa elfu kumi na tano kwa mafuta')
     expect(d.amount).toBe(15_000)
+  })
+
+  it('sums two scale terms stated together ("laki mbili na elfu ishirini na nane" -> 228,000)', () => {
+    const d = parseSentence('Nimenunua dhahabu kwa shilingi laki mbili na elfu ishirini na nane')
+    expect(d.amount).toBe(228_000)
+  })
+
+  it('does not mistake a currency/country word for a person name', () => {
+    const d = parseSentence('nimenunua dhahabu kwa tanzania shilingi laki mbili')
+    expect(d.person).toBeUndefined()
+  })
+
+  it('does not mistake "kila" (each/every) for a person name', () => {
+    const d = parseSentence('nikauza kila gramu kwa tanzania shilingi laki tatu')
+    expect(d.person).toBeUndefined()
+  })
+
+  it('flags a sentence describing two transactions as "other" instead of guessing one side', () => {
+    const d = parseSentence(
+      'leo nimenunua dhahabu gramu kumi kwa tanzania shilingi laki mbili na elfu ishirini na nane kwa kila gramu na nikauza kila gramu kwa tanzania shilingi laki tatu na elfu kumi',
+    )
+    expect(d.type).toBe('other')
+    // Amount should reflect only the first-mentioned transaction (the
+    // purchase), not a meaningless sum of the buy and sell prices.
+    expect(d.amount).toBe(228_000)
+  })
+
+  it('generates a Swahili title for a Swahili sentence regardless of app language toggle', () => {
+    const d = parseSentence('Nimempa John elfu tano kwa diesel')
+    expect(generateTitle(d, d.originalText)).toContain('kwa')
+    expect(generateTitle(d, d.originalText)).not.toMatch(/paid to/i)
+  })
+
+  it('generates an English title for an English sentence', () => {
+    const d = parseSentence('Received 20000 from Mary for gold')
+    expect(generateTitle(d, d.originalText)).toMatch(/Mary/i)
+    expect(generateTitle(d, d.originalText)).not.toMatch(/kwa|imeuzwa/i)
   })
 
   it('keeps a lone spoken digit as a small number, not a scaled amount', () => {
